@@ -53,7 +53,7 @@ services:
     profiles: ["crawler"]
     image: python:3.12-slim
     working_dir: /workspace/crawler
-    command: ["sh", "-c", "pip install --disable-pip-version-check -r requirements.txt && python crawler.py watch"]
+    command: ["sh", "-c", "pip install --disable-pip-version-check -r requirements-runtime.txt && python crawler.py watch"]
     restart: unless-stopped
     depends_on:
       mysql:
@@ -67,14 +67,13 @@ services:
       CRAWLER_SIGNALS_DIR: /var/signals
       THUMBNAIL_DIR: /var/thumbnails
       MEDIA_DIR: /var/media
-      SESSION_DIR: /app/.session
+      SESSION_DIR: /workspace/crawler/.session
       LOG_LEVEL: DEBUG
     volumes:
       - ..:/workspace
       - signals:/var/signals
       - thumbs:/var/thumbnails
       - media:/var/media
-      - tg_session:/app/.session
 
   web:
     image: node:22-alpine
@@ -98,6 +97,5 @@ volumes:
   signals:
   thumbs:
   media:
-  tg_session:
   web_node_modules:
   npm_cache:

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 if TYPE_CHECKING:
     from .config import Config
@@ -26,8 +28,9 @@ async def get_client(cfg: Config) -> TelegramClient:
     if not cfg.tg_api_id or not cfg.tg_api_hash:
         raise RuntimeError("TG_API_ID / TG_API_HASH 未配置")
 
+    session = StringSession(cfg.tg_session_string) if cfg.tg_session_string else str(cfg.session_path)
     client = TelegramClient(
-        str(cfg.session_path),
+        session,
         cfg.tg_api_id,
         cfg.tg_api_hash,
     )
@@ -61,6 +64,22 @@ async def login_interactive(cfg: Config) -> None:
     await client.start(phone=cfg.tg_phone)
     log.info("登录成功，session 已保存至 %s", cfg.session_path)
     await client.disconnect()
+
+
+async def export_session_string(cfg: Config, output_path: str | None = None) -> Path:
+    """Export an authorized local SQLite session to a protected text file."""
+    client = TelegramClient(str(cfg.session_path), cfg.tg_api_id, cfg.tg_api_hash)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise RuntimeError("Telegram session 未授权；请先执行 crawler.py login")
+        target = Path(output_path) if output_path else cfg.session_dir / f"{cfg.tg_session_name}.string"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(client.session.save(), encoding="utf-8")
+        target.chmod(0o600)
+        return target
+    finally:
+        await disconnect_safely(client)
 
 
 async def disconnect_safely(client: TelegramClient | None) -> None:

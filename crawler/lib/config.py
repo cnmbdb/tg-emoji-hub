@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
+from sqlalchemy.engine import URL
 
 
 @dataclass(frozen=True)
@@ -18,12 +19,14 @@ class Config:
     tg_api_id: int
     tg_api_hash: str
     tg_phone: str
+    tg_session_string: str
     tg_session_name: str
     session_dir: Path
     db_dsn: str
     signals_dir: Path
     thumbnail_dir: Path
     media_dir: Path
+    r2_base_url: str
     log_level: str
     download_originals: bool
 
@@ -62,12 +65,14 @@ def load_config(env_file: str | os.PathLike | None = None, *, require_tg: bool =
         tg_api_id=api_id,
         tg_api_hash=api_hash,
         tg_phone=phone,
+        tg_session_string=os.getenv("TG_SESSION_STRING", "").strip(),
         tg_session_name=os.getenv("TG_SESSION_NAME", "tg-emoji-hub"),
         session_dir=Path(os.getenv("SESSION_DIR", "./.session")).resolve(),
-        db_dsn=os.getenv("DB_DSN", ""),
+        db_dsn=os.getenv("DB_DSN", "") or _mysql_dsn_from_env(),
         signals_dir=Path(os.getenv("CRAWLER_SIGNALS_DIR", "./var/signals")).resolve(),
         thumbnail_dir=Path(os.getenv("THUMBNAIL_DIR", "./var/thumbnails")).resolve(),
         media_dir=Path(os.getenv("MEDIA_DIR", "./web/public/emoji")).resolve(),
+        r2_base_url=os.getenv("R2_BASE_URL", "").rstrip("/"),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         download_originals=os.getenv("DOWNLOAD_ORIGINALS", "1").strip() not in ("0", "false", "False", ""),
     )
@@ -77,6 +82,26 @@ def load_config(env_file: str | os.PathLike | None = None, *, require_tg: bool =
     cfg.thumbnail_dir.mkdir(parents=True, exist_ok=True)
     cfg.media_dir.mkdir(parents=True, exist_ok=True)
     return cfg
+
+
+def _mysql_dsn_from_env() -> str:
+    """Build a properly escaped MySQL URL from separate runtime variables."""
+    host = os.getenv("MYSQL_HOST", "").strip()
+    if not host:
+        return ""
+    try:
+        port = int(os.getenv("MYSQL_PORT", "3306"))
+    except ValueError as exc:
+        raise RuntimeError("MYSQL_PORT 必须是整数") from exc
+    return URL.create(
+        "mysql+pymysql",
+        username=os.getenv("MYSQL_USER", "").strip(),
+        password=os.getenv("MYSQL_PASSWORD", ""),
+        host=host,
+        port=port,
+        database=os.getenv("MYSQL_DATABASE", "").strip(),
+        query={"charset": "utf8mb4"},
+    ).render_as_string(hide_password=False)
 
 
 def configure_logging(level: str = "INFO") -> None:

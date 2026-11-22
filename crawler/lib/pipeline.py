@@ -11,7 +11,7 @@ from typing import Any, Protocol
 
 from sqlalchemy.orm import sessionmaker
 
-from . import db as db_mod
+from . import db as db_mod, r2_storage
 from . import extractor, fetcher, media, thumbnail
 from .db import PACK_SOURCE_FEATURED, PACK_SOURCE_MANUAL
 
@@ -36,6 +36,7 @@ async def process_pack(
     download_thumbs: bool = True,
     download_originals: bool = True,
     media_dir: Path | None = None,
+    r2_base_url: str = "",
 ) -> dict[str, int]:
     """处理一个已拉回来的 messages.StickerSet：解构 + 下载缩略图/原文件 + 入库。
 
@@ -68,6 +69,8 @@ async def process_pack(
             try:
                 filename = await thumbnail.download_thumb(client, doc, thumbnail_dir)
                 item["thumbnail_path"] = f"thumbs/{filename}"
+                if r2_base_url:
+                    await r2_storage.upload_file(r2_base_url, "thumbs", thumbnail_dir / filename)
             except Exception:  # noqa: BLE001
                 log.exception("缩略图下载失败 doc_id=%s，使用空路径继续",
                               item.get("custom_emoji_id"))
@@ -77,7 +80,9 @@ async def process_pack(
         # 原文件下载：前端动态 emoji 必须拿到 webm/tgs 才能播放
         if download_originals and media_dir is not None:
             try:
-                await media.download_original(client, doc, media_dir)
+                filename, _mime = await media.download_original(client, doc, media_dir)
+                if r2_base_url:
+                    await r2_storage.upload_file(r2_base_url, "media", media_dir / filename)
             except Exception:  # noqa: BLE001
                 log.exception("原文件下载失败 doc_id=%s，仅入元数据继续",
                               item.get("custom_emoji_id"))
@@ -109,6 +114,7 @@ async def run_full_crawl(
     download_thumbs: bool = True,
     download_originals: bool = True,
     media_dir: Path | None = None,
+    r2_base_url: str = "",
 ) -> dict[str, int]:
     """全量爬取：featured 列表 + DB 中所有 manual 包。
 
@@ -134,6 +140,7 @@ async def run_full_crawl(
                 download_thumbs=download_thumbs,
                 download_originals=download_originals,
                 media_dir=media_dir,
+                r2_base_url=r2_base_url,
             )
             stats["packs_success"] += 1
             stats["emoji_total"] += r["emoji_count"]
@@ -156,6 +163,7 @@ async def run_full_crawl(
                 download_thumbs=download_thumbs,
                 download_originals=download_originals,
                 media_dir=media_dir,
+                r2_base_url=r2_base_url,
             )
             stats["packs_success"] += 1
             stats["emoji_total"] += r["emoji_count"]
@@ -177,6 +185,7 @@ async def crawl_single_pack(
     download_thumbs: bool = True,
     download_originals: bool = True,
     media_dir: Path | None = None,
+    r2_base_url: str = "",
 ) -> dict[str, int]:
     """爬取单个包（供 signals watcher / CLI single_pack.py 调用）。"""
     ss = await fetcher.fetch_pack_by_short_name(client, short_name)
@@ -186,4 +195,5 @@ async def crawl_single_pack(
         download_thumbs=download_thumbs,
         download_originals=download_originals,
         media_dir=media_dir,
+        r2_base_url=r2_base_url,
     )

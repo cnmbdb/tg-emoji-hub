@@ -14,6 +14,8 @@ import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+from . import r2_storage
+
 log = logging.getLogger(__name__)
 
 # 跟 Go 侧 internal/app/pack_usecase.go 的 shortNameRe 必须一致
@@ -134,6 +136,61 @@ async def watch_loop(
             await scan_once(signals_dir, processor)
         except Exception:  # noqa: BLE001
             log.exception("扫描信号目录异常，2s 后重试")
+        try:
+            if stop_event is not None:
+                await asyncio.wait_for(stop_event.wait(), timeout=poll_interval_sec)
+            else:
+                await asyncio.sleep(poll_interval_sec)
+        except TimeoutError:
+            continue
+
+
+async def scan_r2_once(base_url: str, processor: PackProcessor) -> int:
+    """Process pending jobs from the shared R2 object prefix."""
+    keys = await r2_storage.list_keys(base_url, "signals")
+    pending = sorted(key for key in keys if key.startswith("signals/") and key.endswith(".pending"))
+    for key in pending:
+        short_name = Path(key).stem
+        if not _SHORT_NAME_RE.fullmatch(short_name):
+            log.error("忽略非法 R2 信号键 %s", key)
+            continue
+        retry = 0
+        try:
+            raw = await r2_storage.get_object(base_url, key)
+            data = json.loads(raw or b"{}")
+            retry = int(data.get("retry_count", 0))
+            await processor(short_name)
+        except Exception:  # noqa: BLE001
+            log.exception("处理 R2 信号失败 short_name=%s", short_name)
+            retry = min(retry + 1, MAX_RETRY)
+            updated = json.dumps({"created_at": int(time.time()), "retry_count": retry}).encode()
+            if retry >= MAX_RETRY:
+                await r2_storage.put_object(base_url, f"signals/{short_name}.failed", updated)
+                await r2_storage.delete_object(base_url, key)
+            else:
+                await r2_storage.put_object(base_url, key, updated)
+            continue
+        await r2_storage.delete_object(base_url, key)
+        log.info("R2 信号处理完成 short_name=%s", short_name)
+    return len(pending)
+
+
+async def watch_r2_loop(
+    base_url: str,
+    processor: PackProcessor,
+    *,
+    poll_interval_sec: float = 5.0,
+    stop_event: asyncio.Event | None = None,
+) -> None:
+    """Poll the shared R2 queue prefix for jobs added by the API container."""
+    log.info("启动 R2 信号监听 endpoint=%s interval=%.1fs", base_url, poll_interval_sec)
+    while True:
+        if stop_event is not None and stop_event.is_set():
+            return
+        try:
+            await scan_r2_once(base_url, processor)
+        except Exception:  # noqa: BLE001
+            log.exception("扫描 R2 信号异常，%.1fs 后重试", poll_interval_sec)
         try:
             if stop_event is not None:
                 await asyncio.wait_for(stop_event.wait(), timeout=poll_interval_sec)

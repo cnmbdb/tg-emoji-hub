@@ -29,6 +29,7 @@ paths:
   signals_dir: /var/signals
   thumbnail_dir: /var/thumbnails
   media_dir: /var/media
+  r2_base_url: "${R2_BASE_URL:-}"
 EOF
 
 export CONFIG_PATH=/tmp/config.yaml

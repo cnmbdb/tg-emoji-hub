@@ -1,0 +1,13 @@
+{
+  "name": "tg-emoji-hub-crawler-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "wrangler": "^4.136.0"
+  }
+}

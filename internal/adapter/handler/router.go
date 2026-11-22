@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,6 +36,7 @@ type Deps struct {
 	HealthHandler *HealthHandler
 	ThumbnailDir  string
 	MediaDir      string
+	R2BaseURL     string
 }
 
 // Register 注册全部 HTTP 路由
@@ -56,12 +60,12 @@ func Register(r *gin.Engine, deps Deps) {
 		}
 	}
 
-	r.GET("/thumbs/:filename", thumbnailHandler(deps.ThumbnailDir))
-	r.GET("/emoji/:filename", mediaHandler(deps.MediaDir))
+	r.GET("/thumbs/:filename", thumbnailHandler(deps.ThumbnailDir, deps.R2BaseURL))
+	r.GET("/emoji/:filename", mediaHandler(deps.MediaDir, deps.R2BaseURL))
 }
 
 // thumbnailHandler 静态缩略图托管，正则白名单 + 仅 ThumbnailDir 子目录
-func thumbnailHandler(dir string) gin.HandlerFunc {
+func thumbnailHandler(dir, r2BaseURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("filename")
 		if !thumbFilenameRe.MatchString(name) {
@@ -73,7 +77,13 @@ func thumbnailHandler(dir string) gin.HandlerFunc {
 			c.String(http.StatusNotFound, "not found")
 			return
 		}
-		c.File(full)
+		if _, err := os.Stat(full); err == nil {
+			c.File(full)
+			return
+		}
+		if !proxyR2Object(c, r2BaseURL, "thumbs/"+name) {
+			c.String(http.StatusNotFound, "not found")
+		}
 	}
 }
 
@@ -81,7 +91,7 @@ func thumbnailHandler(dir string) gin.HandlerFunc {
 //
 // Content-Type 显式设置：Go http.DetectContentType 不识别 tgs/webm 头部魔数会兜底 octet-stream，
 // 浏览器拿 octet-stream 就当下载文件不会播放
-func mediaHandler(dir string) gin.HandlerFunc {
+func mediaHandler(dir, r2BaseURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("filename")
 		if !mediaFilenameRe.MatchString(name) {
@@ -98,8 +108,43 @@ func mediaHandler(dir string) gin.HandlerFunc {
 		if ct, found := mediaContentTypes[ext]; found {
 			c.Header("Content-Type", ct)
 		}
-		c.File(full)
+		if _, err := os.Stat(full); err == nil {
+			c.File(full)
+			return
+		}
+		if !proxyR2Object(c, r2BaseURL, "media/"+name) {
+			c.String(http.StatusNotFound, "not found")
+		}
 	}
+}
+
+func proxyR2Object(c *gin.Context, baseURL, key string) bool {
+	if baseURL == "" {
+		return false
+	}
+	url := strings.TrimRight(baseURL, "/") + "/" + key
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		c.Status(http.StatusBadGateway)
+		return true
+	}
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		c.Status(http.StatusBadGateway)
+		return true
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return false
+	}
+	for _, name := range []string{"Content-Type", "Cache-Control", "Etag"} {
+		if value := resp.Header.Get(name); value != "" {
+			c.Header(name, value)
+		}
+	}
+	c.Status(resp.StatusCode)
+	_, _ = io.Copy(c.Writer, resp.Body)
+	return true
 }
 
 // safeJoin 校验 filename 不含路径分隔 + 拼出的绝对路径仍在 dir 内

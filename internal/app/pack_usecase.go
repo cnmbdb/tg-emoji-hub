@@ -32,6 +32,7 @@ type AddManualResult struct {
 type PackUseCase struct {
 	repo       port.PackRepository
 	signalsDir string
+	signalsURL string
 
 	// telegramCheckURL 可替换，方便测试。nil 时用默认 t.me 地址
 	telegramCheckURL func(shortName string) string
@@ -44,6 +45,11 @@ func NewPackUseCase(repo port.PackRepository, signalsDir string) *PackUseCase {
 // SetTelegramCheckURL 测试用：覆盖验证包是否存在时访问的 URL 生成函数
 func (u *PackUseCase) SetTelegramCheckURL(fn func(shortName string) string) {
 	u.telegramCheckURL = fn
+}
+
+// SetSignalBaseURL enables writing queue records through an internal R2 gateway.
+func (u *PackUseCase) SetSignalBaseURL(baseURL string) {
+	u.signalsURL = strings.TrimRight(baseURL, "/")
 }
 
 // List 分页查询
@@ -153,7 +159,7 @@ func (u *PackUseCase) AddManual(ctx context.Context, shortName string) (*AddManu
 	}
 
 	// 写信号文件触发 crawler；失败不阻断响应（pack 已落库可补救）
-	if err := u.writeSignal(shortName); err != nil {
+	if err := u.writeSignal(ctx, shortName); err != nil {
 		return &AddManualResult{Pack: pack, AlreadyExisted: false},
 			apperr.ErrInternal.WithMessage("pack 已创建，但信号文件写入失败").WithCause(err)
 	}
@@ -172,7 +178,31 @@ func (u *PackUseCase) FindByShortName(ctx context.Context, shortName string) (*e
 // writeSignal 写 signals_dir/{short_name}.pending
 //
 // 必须在 short_name 通过正则后才能调用，这里再做一次 join 后 prefix 防御性检查
-func (u *PackUseCase) writeSignal(shortName string) error {
+func (u *PackUseCase) writeSignal(ctx context.Context, shortName string) error {
+	if u.signalsURL != "" {
+		if !shortNameRe.MatchString(shortName) {
+			return stderrors.New("non-whitelisted short_name")
+		}
+		body := fmt.Sprintf(`{"created_at":%d,"retry_count":0}`, time.Now().Unix())
+		reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodPut,
+			u.signalsURL+"/signals/"+shortName+".pending", strings.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("build R2 queue request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("write R2 queue record: %w", err)
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("write R2 queue record: status %d", resp.StatusCode)
+		}
+		return nil
+	}
 	if u.signalsDir == "" {
 		return stderrors.New("signals_dir 未配置")
 	}

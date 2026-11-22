@@ -47,6 +47,7 @@ type PathsConfig struct {
 	SignalsDir   string `mapstructure:"signals_dir"`
 	ThumbnailDir string `mapstructure:"thumbnail_dir"`
 	MediaDir     string `mapstructure:"media_dir"`
+	R2BaseURL    string `mapstructure:"r2_base_url"`
 }
 
 // DSN 拼 MySQL 连接串

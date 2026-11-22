@@ -41,6 +41,7 @@ func MustStartHTTP(cfg *Config, db *gorm.DB, logger *zap.Logger) *HTTPServer {
 
 	searchUC := app.NewSearchUseCase(searchRepo)
 	packUC := app.NewPackUseCase(packRepo, cfg.Paths.SignalsDir)
+	packUC.SetSignalBaseURL(cfg.Paths.R2BaseURL)
 	statsUC := app.NewStatsUseCase(statsRepo)
 
 	searchH := handler.NewSearchHandler(searchUC, cfg.Server.BaseURL)
@@ -63,6 +64,7 @@ func MustStartHTTP(cfg *Config, db *gorm.DB, logger *zap.Logger) *HTTPServer {
 		HealthHandler: healthH,
 		ThumbnailDir:  cfg.Paths.ThumbnailDir,
 		MediaDir:      cfg.Paths.MediaDir,
+		R2BaseURL:     cfg.Paths.R2BaseURL,
 	})
 
 	// 挂 MCP Streamable HTTP 到 cfg.MCP.Path

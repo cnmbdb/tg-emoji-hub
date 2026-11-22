@@ -1,7 +1,8 @@
-import { DurableObject } from "cloudflare:workers";
+import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 
 interface Env {
   SERVER: DurableObjectNamespace<ServerContainer>;
+  MEDIA: R2Bucket;
   MYSQL_HOST: string;
   MYSQL_PORT: string;
   MYSQL_USER: string;
@@ -33,6 +34,14 @@ export class ServerContainer extends DurableObject<Env> {
 
   private async startAndWait(): Promise<void> {
     const container = this.ctx.container!;
+    const current = await container.inspect();
+    if (current && current.image !== container.images.base) {
+      await container.destroy("Refreshing to the configured container image");
+    }
+    await container.interceptOutboundHttp(
+      "r2.internal",
+      this.ctx.exports.MediaGateway({ props: {} }),
+    );
     if (!container.running) {
       container.start({
         image: container.images.base,
@@ -46,6 +55,7 @@ export class ServerContainer extends DurableObject<Env> {
           MYSQL_DATABASE: this.env.MYSQL_DATABASE,
           PUBLIC_URL: this.env.PUBLIC_URL,
           LOG_LEVEL: this.env.LOG_LEVEL,
+          R2_BASE_URL: "http://r2.internal/objects",
         },
       });
     }
@@ -67,6 +77,58 @@ export class ServerContainer extends DurableObject<Env> {
       }
     }
     throw new Error("Server container did not become healthy", { cause: lastError });
+  }
+}
+
+export class MediaGateway extends WorkerEntrypoint<Env> {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/objects/_list" && request.method === "GET") {
+      const prefix = url.searchParams.get("prefix") ?? "";
+      if (!/^(signals|thumbs|media)\/$/.test(prefix)) {
+        return new Response("invalid prefix", { status: 400 });
+      }
+      const listed = await this.env.MEDIA.list({
+        prefix: `tg-emoji-hub/${prefix}`,
+        limit: 1000,
+      });
+      return Response.json({
+        keys: listed.objects.map((object) => object.key.slice("tg-emoji-hub/".length)),
+        truncated: listed.truncated,
+      });
+    }
+
+    if (!url.pathname.startsWith("/objects/")) {
+      return new Response("not found", { status: 404 });
+    }
+    const key = url.pathname.slice("/objects/".length);
+    if (!/^(signals|thumbs|media)\/[A-Za-z0-9_.-]+$/.test(key) || key.includes("..")) {
+      return new Response("invalid key", { status: 400 });
+    }
+    const objectKey = `tg-emoji-hub/${key}`;
+
+    if (request.method === "PUT") {
+      await this.env.MEDIA.put(objectKey, request.body, {
+        httpMetadata: {
+          contentType: request.headers.get("content-type") ?? "application/octet-stream",
+        },
+      });
+      return new Response(null, { status: 204 });
+    }
+    if (request.method === "DELETE") {
+      await this.env.MEDIA.delete(objectKey);
+      return new Response(null, { status: 204 });
+    }
+    if (request.method === "GET" || request.method === "HEAD") {
+      const object = await this.env.MEDIA.get(objectKey);
+      if (!object) return new Response("not found", { status: 404 });
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("etag", object.httpEtag);
+      headers.set("cache-control", "public, max-age=31536000, immutable");
+      return new Response(request.method === "HEAD" ? null : object.body, { headers });
+    }
+    return new Response("method not allowed", { status: 405, headers: { Allow: "GET, HEAD, PUT, DELETE" } });
   }
 }
 

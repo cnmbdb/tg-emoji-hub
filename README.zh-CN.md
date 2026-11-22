@@ -200,7 +200,24 @@ url = "http://localhost:8080/mcp"
 docker compose -f deployments/docker-compose.dev.yml up
 ```
 
-打开 `http://localhost:5173`。启动 Telegram 爬虫时，还需要设置 `TG_API_ID`、`TG_API_HASH` 和 `TG_PHONE`，再运行 `docker compose -f deployments/docker-compose.dev.yml --profile crawler up`。Go 编译缓存、npm 缓存、爬虫会话和共享数据保存在 Docker volumes 中。
+打开 `http://localhost:5173`。开发 Telegram 爬虫时，将 `TG_API_ID`、`TG_API_HASH` 和 `TG_PHONE` 写入被 Git 忽略的 `deployments/.env`，再启动 crawler profile：
+
+```bash
+docker compose -f deployments/docker-compose.dev.yml --profile crawler up
+```
+
+Cloudflare crawler 还需要 Telethon 会话。先在本地创建会话，验证码只在终端输入；再把生成的 session string 作为 Worker Secret 上传：
+
+```bash
+docker compose -f deployments/docker-compose.dev.yml --profile crawler run --rm crawler sh -c 'pip install -r requirements-runtime.txt && python crawler.py login'
+docker compose -f deployments/docker-compose.dev.yml --profile crawler run --rm crawler sh -c 'pip install -r requirements-runtime.txt && python crawler.py export-session-string'
+cd cloudflare/crawler
+for key in TG_API_ID TG_API_HASH TG_PHONE; do grep "^${key}=" ../../deployments/.env | cut -d= -f2- | ./node_modules/.bin/wrangler secret put "$key"; done
+./node_modules/.bin/wrangler secret put TG_SESSION_STRING < ../../crawler/.session/tg-emoji-hub.string
+./node_modules/.bin/wrangler secret put MYSQL_PASSWORD < <(railway variable list --service MySQL --project c34ceeba-5146-4342-b78b-034bd5f688bd --environment production --json | jq -r .MYSQLPASSWORD)
+```
+
+本地开发的 Go 编译缓存和 npm 缓存保存在 Docker volumes 中；源码、Telegram session 和共享数据通过 bind mount 使用。
 
 **Server**
 

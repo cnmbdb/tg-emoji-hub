@@ -11,7 +11,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 # 让 `python crawler.py` 也能 import lib
@@ -39,6 +42,7 @@ async def cmd_full(cfg: Config, *, dry_run: bool,
             download_thumbs=not no_thumbs,
             download_originals=do_originals,
             media_dir=cfg.media_dir,
+            r2_base_url=cfg.r2_base_url,
         )
         log.info("dry-run 统计 %s", stats)
         log.info("FakeClient 调用记录 %s", fake.calls)
@@ -89,14 +93,43 @@ async def cmd_watch(cfg: Config, *, dry_run: bool, no_originals: bool = False) -
     async def processor(short_name: str) -> None:
         await pipeline.crawl_single_pack(
             client, short_name, session_factory, cfg.thumbnail_dir,
-            download_originals=do_originals, media_dir=cfg.media_dir,
+                download_originals=do_originals, media_dir=cfg.media_dir,
+                r2_base_url=cfg.r2_base_url,
         )
 
     try:
-        await signals.watch_loop(cfg.signals_dir, processor)
+        _start_health_server()
+        if cfg.r2_base_url:
+            await signals.watch_r2_loop(cfg.r2_base_url, processor)
+        else:
+            await signals.watch_loop(cfg.signals_dir, processor)
         return 0
     finally:
         await client_mod.disconnect_safely(client)
+
+
+def _start_health_server() -> None:
+    """Optional HTTP readiness endpoint used by the Cloudflare Container Worker."""
+    raw_port = os.getenv("CRAWLER_HEALTH_PORT", "").strip()
+    if not raw_port:
+        return
+    port = int(raw_port)
+
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path != "/healthz":
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("0.0.0.0", port), HealthHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -117,13 +150,24 @@ def _build_parser() -> argparse.ArgumentParser:
                          help="用 FakeClient + sqlite in-memory，不联网不入库")
     watch_p.add_argument("--no-originals", action="store_true",
                          help="跳过原文件下载")
+    sub.add_parser("login", help="首次 Telegram 登录并保存本地 SQLite session")
+    export_p = sub.add_parser("export-session-string", help="导出 Cloudflare 用的 StringSession")
+    export_p.add_argument("--output", default=None, help="输出文件；默认写入 SESSION_DIR")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    cfg = load_config(require_tg=not args.dry_run)
+    cfg = load_config(require_tg=not getattr(args, "dry_run", False))
     configure_logging(cfg.log_level)
+
+    if args.cmd == "login":
+        asyncio.run(client_mod.login_interactive(cfg))
+        return 0
+    if args.cmd == "export-session-string":
+        output = asyncio.run(client_mod.export_session_string(cfg, args.output))
+        log.info("StringSession 已写入权限为 0600 的本地文件：%s", output)
+        return 0
 
     if args.cmd == "full":
         return asyncio.run(cmd_full(

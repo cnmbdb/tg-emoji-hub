@@ -200,7 +200,24 @@ Requirements: Go 1.26+, Node.js 22, Python 3.11+, MySQL 8.
 docker compose -f deployments/docker-compose.dev.yml up
 ```
 
-Open `http://localhost:5173`. To run the Telegram crawler, also set `TG_API_ID`, `TG_API_HASH`, and `TG_PHONE`, then start it with `docker compose -f deployments/docker-compose.dev.yml --profile crawler up`. The dev Compose file keeps the Go build cache, npm cache, crawler session, and shared data in Docker volumes.
+Open `http://localhost:5173`. For crawler development, put `TG_API_ID`, `TG_API_HASH`, and `TG_PHONE` in the ignored `deployments/.env`, then start the crawler profile:
+
+```bash
+docker compose -f deployments/docker-compose.dev.yml --profile crawler up
+```
+
+The Cloudflare crawler also needs a Telethon session. Create it locally so the Telegram verification code stays in your terminal, then upload the generated session string as a Worker secret:
+
+```bash
+docker compose -f deployments/docker-compose.dev.yml --profile crawler run --rm crawler sh -c 'pip install -r requirements-runtime.txt && python crawler.py login'
+docker compose -f deployments/docker-compose.dev.yml --profile crawler run --rm crawler sh -c 'pip install -r requirements-runtime.txt && python crawler.py export-session-string'
+cd cloudflare/crawler
+for key in TG_API_ID TG_API_HASH TG_PHONE; do grep "^${key}=" ../../deployments/.env | cut -d= -f2- | ./node_modules/.bin/wrangler secret put "$key"; done
+./node_modules/.bin/wrangler secret put TG_SESSION_STRING < ../../crawler/.session/tg-emoji-hub.string
+./node_modules/.bin/wrangler secret put MYSQL_PASSWORD < <(railway variable list --service MySQL --project c34ceeba-5146-4342-b78b-034bd5f688bd --environment production --json | jq -r .MYSQLPASSWORD)
+```
+
+The dev Compose file keeps Go and npm caches in Docker volumes; source, Telegram session, and shared data are bind-mounted for local development.
 
 **Server**
 

@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tg-emoji-hub-crawler",
+  "main": "src/index.ts",
+  "account_id": "5180a52716103d1fbc4c77b03220c040",
+  "compatibility_date": "2026-11-22",
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "containers": [
+    {
+      "class_name": "CrawlerContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "../../deployments/Dockerfile.crawler",
+          "build_context": "../.."
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CRAWLER", "class_name": "CrawlerContainer" }
+    ]
+  },
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "tg-emoji-hub-assets" }
+  ],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CrawlerContainer"] }
+  ],
+  "vars": {
+    "MYSQL_HOST": "sakura.proxy.rlwy.net",
+    "MYSQL_PORT": "24553",
+    "MYSQL_USER": "root",
+    "MYSQL_DATABASE": "tg_emoji_hub",
+    "TG_SESSION_NAME": "tg-emoji-hub",
+    "CRAWLER_SIGNALS_DIR": "/var/signals",
+    "THUMBNAIL_DIR": "/var/thumbnails",
+    "MEDIA_DIR": "/var/media",
+    "SESSION_DIR": "/app/.session",
+    "CRAWLER_HEALTH_PORT": "8081",
+    "LOG_LEVEL": "INFO",
+    "DOWNLOAD_ORIGINALS": "1"
+  }
+}

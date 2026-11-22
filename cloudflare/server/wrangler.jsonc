@@ -22,6 +22,9 @@
       { "name": "SERVER", "class_name": "ServerContainer" }
     ]
   },
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "tg-emoji-hub-assets" }
+  ],
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ServerContainer"] }
   ],
