@@ -7,11 +7,13 @@ session 文件路径由 cfg.session_path 控制，挂载 volume 持久化。
 from __future__ import annotations
 
 import asyncio
+import getpass
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 
 if TYPE_CHECKING:
@@ -61,7 +63,14 @@ async def login_interactive(cfg: Config) -> None:
         cfg.tg_api_id,
         cfg.tg_api_hash,
     )
-    await client.start(phone=cfg.tg_phone)
+    sent = await client.send_code_request(cfg.tg_phone)
+    log.info("Telegram 验证码投递方式：%s", type(sent.type).__name__)
+    code = input("Please enter the code you received: ").strip()
+    try:
+        await client.sign_in(phone=cfg.tg_phone, code=code, phone_code_hash=sent.phone_code_hash)
+    except SessionPasswordNeededError:
+        password = getpass.getpass("Telegram two-step verification password: ")
+        await client.sign_in(password=password)
     log.info("登录成功，session 已保存至 %s", cfg.session_path)
     await client.disconnect()
 
