@@ -1,10 +1,103 @@
-# 本地开发叠加：把 MySQL 暴露到本机方便 IDE 直连
-# 用法：docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.dev.yml up -d
+# 本机开发：直接挂载源码并用官方运行时镜像执行，不构建项目镜像。
+# 用法：docker compose -f deployments/docker-compose.dev.yml up
+name: tg-emoji-hub-dev
+
 services:
   mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: tg_emoji_hub
+      MYSQL_USER: tgemoji
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?在 deployments/.env 里设置 MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?在 deployments/.env 里设置 MYSQL_ROOT_PASSWORD}
     ports:
       - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../migrations:/migrations:ro
+      - ./mysql-init/10-migrate.sh:/docker-entrypoint-initdb.d/10-migrate.sh:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  server:
+    image: golang:1.26-alpine
+    working_dir: /workspace
+    command: ["sh", "/workspace/deployments/server-dev-entrypoint.sh"]
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: tgemoji
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?在 deployments/.env 里设置 MYSQL_PASSWORD}
+      MYSQL_DATABASE: tg_emoji_hub
+      PUBLIC_URL: http://localhost:5173
+      LOG_LEVEL: debug
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ..:/workspace
+      - go_cache:/go/pkg/mod
+      - signals:/var/signals
+      - thumbs:/var/thumbnails
+      - media:/var/media
 
   crawler:
+    profiles: ["crawler"]
+    image: python:3.12-slim
+    working_dir: /workspace/crawler
+    command: ["sh", "-c", "pip install --disable-pip-version-check -r requirements.txt && python crawler.py watch"]
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
     environment:
+      TG_API_ID: ${TG_API_ID:-}
+      TG_API_HASH: ${TG_API_HASH:-}
+      TG_PHONE: ${TG_PHONE:-}
+      TG_SESSION_NAME: tg-emoji-hub
+      DB_DSN: mysql+pymysql://tgemoji:${MYSQL_PASSWORD:?在 deployments/.env 里设置 MYSQL_PASSWORD}@mysql:3306/tg_emoji_hub?charset=utf8mb4
+      CRAWLER_SIGNALS_DIR: /var/signals
+      THUMBNAIL_DIR: /var/thumbnails
+      MEDIA_DIR: /var/media
+      SESSION_DIR: /app/.session
       LOG_LEVEL: DEBUG
+    volumes:
+      - ..:/workspace
+      - signals:/var/signals
+      - thumbs:/var/thumbnails
+      - media:/var/media
+      - tg_session:/app/.session
+
+  web:
+    image: node:22-alpine
+    working_dir: /workspace/web
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      VITE_DEV_API_TARGET: http://server:8080
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ..:/workspace
+      - web_node_modules:/workspace/web/node_modules
+      - npm_cache:/root/.npm
+
+volumes:
+  mysql_data:
+  go_cache:
+  signals:
+  thumbs:
+  media:
+  tg_session:
+  web_node_modules:
+  npm_cache:

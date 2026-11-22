@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tg-emoji-hub-server",
+  "main": "src/index.ts",
+  "account_id": "5180a52716103d1fbc4c77b03220c040",
+  "compatibility_date": "2026-11-22",
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "ServerContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "../../deployments/Dockerfile.server",
+          "build_context": "../.."
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "SERVER", "class_name": "ServerContainer" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ServerContainer"] }
+  ],
+  "vars": {
+    "MYSQL_HOST": "sakura.proxy.rlwy.net",
+    "MYSQL_PORT": "24553",
+    "MYSQL_USER": "root",
+    "MYSQL_DATABASE": "tg_emoji_hub",
+    "PUBLIC_URL": "https://tg-emoji-hub.pages.dev",
+    "LOG_LEVEL": "info"
+  }
+}

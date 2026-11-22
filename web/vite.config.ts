@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const devApiTarget = process.env.VITE_DEV_API_TARGET ?? "http://localhost:8080";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -19,15 +20,23 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        target: devApiTarget,
         changeOrigin: true,
       },
       "/healthz": {
-        target: "http://localhost:8080",
+        target: devApiTarget,
+        changeOrigin: true,
+      },
+      "/thumbs": {
+        target: devApiTarget,
+        changeOrigin: true,
+      },
+      "/emoji": {
+        target: devApiTarget,
         changeOrigin: true,
       },
       "/mcp": {
-        target: "http://localhost:8080",
+        target: devApiTarget,
         changeOrigin: true,
         ws: true,
       },

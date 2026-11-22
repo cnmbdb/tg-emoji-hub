@@ -11,11 +11,11 @@ server:
   mode: prod
 
 database:
-  host: mysql
-  port: 3306
-  user: tgemoji
+  host: "${MYSQL_HOST:-mysql}"
+  port: ${MYSQL_PORT:-3306}
+  user: "${MYSQL_USER:-tgemoji}"
   password: "${MYSQL_PASSWORD}"
-  name: tg_emoji_hub
+  name: "${MYSQL_DATABASE:-tg_emoji_hub}"
 
 log:
   level: ${LOG_LEVEL:-info}

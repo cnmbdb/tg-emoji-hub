@@ -34,6 +34,10 @@ services:
         condition: service_healthy
     environment:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?在 deployments/.env 里设置 MYSQL_PASSWORD}
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-tgemoji}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tg_emoji_hub}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
@@ -80,7 +84,7 @@ services:
       TG_API_HASH: ${TG_API_HASH:-}
       TG_PHONE: ${TG_PHONE:-}
       TG_SESSION_NAME: tg-emoji-hub
-      DB_DSN: mysql+pymysql://tgemoji:${MYSQL_PASSWORD:?在 deployments/.env 里设置 MYSQL_PASSWORD}@mysql:3306/tg_emoji_hub?charset=utf8mb4
+      DB_DSN: ${DB_DSN:-mysql+pymysql://tgemoji:${MYSQL_PASSWORD:?在 deployments/.env 里设置 MYSQL_PASSWORD}@${MYSQL_HOST:-mysql}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-tg_emoji_hub}?charset=utf8mb4}
       CRAWLER_SIGNALS_DIR: /var/signals
       THUMBNAIL_DIR: /var/thumbnails
       MEDIA_DIR: /var/media

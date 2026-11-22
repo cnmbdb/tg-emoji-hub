@@ -17,6 +17,8 @@ vendor/
 /web/dist/
 /web/node_modules/
 /web/.vite/
+/cloudflare/**/node_modules/
+/cloudflare/**/.wrangler/
 
 # Config & secrets
 configs/config.yaml

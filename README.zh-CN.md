@@ -194,11 +194,13 @@ url = "http://localhost:8080/mcp"
 
 需要：Go 1.26+、Node.js 22、Python 3.11+、MySQL 8。
 
-**数据库**：可以使用任意 MySQL 8 实例，或者只用 Compose 启动数据库，并把 3306 端口发布到 `127.0.0.1`（需要先准备好 `deployments/.env`，见快速上手）：
+**挂载源码的 Docker 开发环境**：将 `deployments/.env.example` 复制为 `deployments/.env`，填写 `MYSQL_PASSWORD` 和 `MYSQL_ROOT_PASSWORD`，然后启动 MySQL、Go 服务和 Vite 开发服务器。源码目录通过 bind mount 挂载；Docker 直接使用 Go、Python、Node 官方运行时镜像，不构建项目镜像。
 
 ```bash
-docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.dev.yml up -d mysql
+docker compose -f deployments/docker-compose.dev.yml up
 ```
+
+打开 `http://localhost:5173`。启动 Telegram 爬虫时，还需要设置 `TG_API_ID`、`TG_API_HASH` 和 `TG_PHONE`，再运行 `docker compose -f deployments/docker-compose.dev.yml --profile crawler up`。Go 编译缓存、npm 缓存、爬虫会话和共享数据保存在 Docker volumes 中。
 
 **Server**
 

@@ -194,11 +194,13 @@ Both are written as moving an existing local installation to a server, and both 
 
 Requirements: Go 1.26+, Node.js 22, Python 3.11+, MySQL 8.
 
-**Database.** Use any MySQL 8 instance, or start only the database from the Compose files with port 3306 published on `127.0.0.1` (needs `deployments/.env`, see the quick start):
+**Mount-based Docker development.** Copy `deployments/.env.example` to `deployments/.env`, set `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD`, then start the MySQL, Go server, and Vite dev server. Source directories are bind-mounted; Docker uses the upstream Go, Python, and Node runtime images without building project images.
 
 ```bash
-docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.dev.yml up -d mysql
+docker compose -f deployments/docker-compose.dev.yml up
 ```
+
+Open `http://localhost:5173`. To run the Telegram crawler, also set `TG_API_ID`, `TG_API_HASH`, and `TG_PHONE`, then start it with `docker compose -f deployments/docker-compose.dev.yml --profile crawler up`. The dev Compose file keeps the Go build cache, npm cache, crawler session, and shared data in Docker volumes.
 
 **Server**
 

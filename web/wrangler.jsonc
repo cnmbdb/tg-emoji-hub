@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tg-emoji-hub-web",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-11-22",
+  "services": [
+    {
+      "binding": "API",
+      "service": "tg-emoji-hub-server"
+    }
+  ]
+}
