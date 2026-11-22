@@ -139,7 +139,7 @@ async def export_session_string(cfg: Config, output_path: str | None = None) -> 
             raise RuntimeError("Telegram session 未授权；请先执行 crawler.py login")
         target = Path(output_path) if output_path else cfg.session_dir / f"{cfg.tg_session_name}.string"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(client.session.save(), encoding="utf-8")
+        target.write_text(StringSession.save(client.session), encoding="utf-8")
         target.chmod(0o600)
         return target
     finally:
