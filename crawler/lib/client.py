@@ -63,16 +63,22 @@ async def login_interactive(cfg: Config) -> None:
         cfg.tg_api_id,
         cfg.tg_api_hash,
     )
-    sent = await client.send_code_request(cfg.tg_phone)
-    log.info("Telegram 验证码投递方式：%s", type(sent.type).__name__)
-    code = input("Please enter the code you received: ").strip()
     try:
-        await client.sign_in(phone=cfg.tg_phone, code=code, phone_code_hash=sent.phone_code_hash)
-    except SessionPasswordNeededError:
-        password = getpass.getpass("Telegram two-step verification password: ")
-        await client.sign_in(password=password)
-    log.info("登录成功，session 已保存至 %s", cfg.session_path)
-    await client.disconnect()
+        await client.connect()
+        if await client.is_user_authorized():
+            log.info("这个本地 session 已授权，无需再次登录：%s", cfg.session_path)
+            return
+        sent = await client.send_code_request(cfg.tg_phone)
+        log.info("Telegram 验证码投递方式：%s", type(sent.type).__name__)
+        code = input("Please enter the code you received: ").strip()
+        try:
+            await client.sign_in(phone=cfg.tg_phone, code=code, phone_code_hash=sent.phone_code_hash)
+        except SessionPasswordNeededError:
+            password = getpass.getpass("Telegram two-step verification password: ")
+            await client.sign_in(password=password)
+        log.info("登录成功，session 已保存至 %s", cfg.session_path)
+    finally:
+        await disconnect_safely(client)
 
 
 async def export_session_string(cfg: Config, output_path: str | None = None) -> Path:
