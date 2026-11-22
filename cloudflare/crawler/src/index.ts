@@ -27,6 +27,11 @@ const PORT = 8081;
 const ALARM_INTERVAL_MS = 5 * 60 * 1000;
 const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
 
+function telegramSecretsReady(env: Env): boolean {
+  const values = [env.TG_API_ID, env.TG_API_HASH, env.TG_PHONE, env.TG_SESSION_STRING];
+  return values.every((value) => Boolean(value) && !value!.startsWith("REPLACE_ME_"));
+}
+
 export class CrawlerContainer extends DurableObject<Env> {
   private starting?: Promise<void>;
 
@@ -34,7 +39,7 @@ export class CrawlerContainer extends DurableObject<Env> {
     if (new URL(request.url).pathname !== "/__wake") {
       return new Response("not found", { status: 404 });
     }
-    if (!this.env.TG_API_ID || !this.env.TG_API_HASH || !this.env.TG_PHONE || !this.env.TG_SESSION_STRING) {
+    if (!telegramSecretsReady(this.env)) {
       return new Response("Telegram credentials or session are not configured", { status: 503 });
     }
     this.starting ??= this.startAndWait().finally(() => {
@@ -46,7 +51,7 @@ export class CrawlerContainer extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    if (!this.env.TG_API_ID || !this.env.TG_API_HASH || !this.env.TG_PHONE || !this.env.TG_SESSION_STRING) return;
+    if (!telegramSecretsReady(this.env)) return;
     this.starting ??= this.startAndWait().finally(() => {
       this.starting = undefined;
     });
@@ -164,7 +169,7 @@ export class MediaGateway extends WorkerEntrypoint<Env> {
 
 export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
-    if (!env.TG_API_ID || !env.TG_API_HASH || !env.TG_PHONE || !env.TG_SESSION_STRING) {
+    if (!telegramSecretsReady(env)) {
       console.warn("Crawler idle: Telegram API credentials and TG_SESSION_STRING are required");
       return;
     }
