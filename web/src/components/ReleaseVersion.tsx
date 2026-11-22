@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-const RELEASES_URL = "https://github.com/cnmbdb/tg-emoji-hub/releases";
+const FALLBACK_TAG = `v${import.meta.env.VITE_APP_VERSION}`;
+const FALLBACK_RELEASE = {
+  tag_name: FALLBACK_TAG,
+  html_url: `https://github.com/cnmbdb/tg-emoji-hub/releases/tag/${FALLBACK_TAG}`,
+};
 
 type GitHubRelease = {
   tag_name: string;
@@ -8,29 +12,26 @@ type GitHubRelease = {
 };
 
 export default function ReleaseVersion() {
-  const [release, setRelease] = useState<GitHubRelease | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [release, setRelease] = useState<GitHubRelease>(FALLBACK_RELEASE);
 
   useEffect(() => {
     let active = true;
 
     void fetch("/api/version")
       .then(async (response) => {
-        if (!response.ok) return null;
+        if (!response.ok) return;
         const data = (await response.json()) as Partial<GitHubRelease>;
         if (
           typeof data.tag_name !== "string" ||
           typeof data.html_url !== "string"
         ) {
-          return null;
+          return undefined;
         }
         return { tag_name: data.tag_name, html_url: data.html_url };
       })
-      .catch(() => null)
+      .catch(() => undefined)
       .then((latest) => {
-        if (!active) return;
-        setRelease(latest);
-        setLoading(false);
+        if (active && latest) setRelease(latest);
       });
 
     return () => {
@@ -38,26 +39,18 @@ export default function ReleaseVersion() {
     };
   }, []);
 
-  const version = loading ? "…" : (release?.tag_name ?? "dev");
-
   return (
     <a
-      href={release?.html_url ?? RELEASES_URL}
+      href={release.html_url}
       target="_blank"
       rel="noopener noreferrer"
       title={
-        release
-          ? `GitHub Release ${release.tag_name}`
-          : "View GitHub Releases"
+        `GitHub Release ${release.tag_name}`
       }
-      aria-label={
-        release
-          ? `View release ${release.tag_name}`
-          : "View GitHub Releases"
-      }
+      aria-label={`View release ${release.tag_name}`}
       className="hidden font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground sm:inline"
     >
-      {version}
+      {release.tag_name}
     </a>
   );
 }

@@ -1,13 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const devApiTarget = process.env.VITE_DEV_API_TARGET ?? "http://localhost:8080";
+const packageVersion = (
+  JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 
 export default defineConfig({
+  define: {
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(packageVersion),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
