@@ -151,6 +151,7 @@ def _build_parser() -> argparse.ArgumentParser:
     watch_p.add_argument("--no-originals", action="store_true",
                          help="跳过原文件下载")
     sub.add_parser("login", help="首次 Telegram 登录并保存本地 SQLite session")
+    sub.add_parser("login-qr", help="使用已登录的 Telegram 手机客户端扫码登录")
     export_p = sub.add_parser("export-session-string", help="导出 Cloudflare 用的 StringSession")
     export_p.add_argument("--output", default=None, help="输出文件；默认写入 SESSION_DIR")
     return p
@@ -163,6 +164,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "login":
         asyncio.run(client_mod.login_interactive(cfg))
+        return 0
+    if args.cmd == "login-qr":
+        asyncio.run(client_mod.login_qr(cfg))
         return 0
     if args.cmd == "export-session-string":
         output = asyncio.run(client_mod.export_session_string(cfg, args.output))

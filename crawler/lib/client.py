@@ -105,6 +105,31 @@ async def login_interactive(cfg: Config) -> None:
         await disconnect_safely(client)
 
 
+async def login_qr(cfg: Config) -> None:
+    """Authorize a local session by scanning a short-lived QR code."""
+    import qrcode
+
+    client = TelegramClient(str(cfg.session_path), cfg.tg_api_id, cfg.tg_api_hash)
+    try:
+        await client.connect()
+        if await client.is_user_authorized():
+            log.info("这个本地 session 已授权，无需再次登录")
+            return
+        qr = await client.qr_login()
+        picture = qrcode.QRCode(border=2)
+        picture.add_data(qr.url)
+        picture.make(fit=True)
+        print("请在已登录的 Telegram 手机客户端中打开 设置 → 设备 → 连接桌面设备，扫描下方二维码。")
+        picture.print_ascii(invert=True)
+        try:
+            await qr.wait()
+        except SessionPasswordNeededError:
+            await client.sign_in(password=getpass.getpass("Telegram two-step verification password: "))
+        log.info("登录成功，session 已保存至 %s", cfg.session_path)
+    finally:
+        await disconnect_safely(client)
+
+
 async def export_session_string(cfg: Config, output_path: str | None = None) -> Path:
     """Export an authorized local SQLite session to a protected text file."""
     client = TelegramClient(str(cfg.session_path), cfg.tg_api_id, cfg.tg_api_hash)
