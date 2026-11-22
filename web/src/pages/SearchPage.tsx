@@ -112,7 +112,7 @@ export default function SearchPage() {
             </button>
             <Button size="sm" variant="outline" className="gap-1.5" asChild>
               <a
-                href="https://t.me/devqun"
+                href="https://t.me/c/HFZChat/1"
                 target="_blank"
                 rel="noopener noreferrer"
               >
