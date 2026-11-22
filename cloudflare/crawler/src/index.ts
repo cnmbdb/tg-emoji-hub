@@ -90,6 +90,7 @@ export class CrawlerContainer extends DurableObject<Env> {
           MEDIA_DIR: this.env.MEDIA_DIR,
           SESSION_DIR: this.env.SESSION_DIR,
           CRAWLER_HEALTH_PORT: this.env.CRAWLER_HEALTH_PORT,
+          CRAWLER_INITIAL_FULL: "1",
           LOG_LEVEL: this.env.LOG_LEVEL,
           DOWNLOAD_ORIGINALS: this.env.DOWNLOAD_ORIGINALS,
           R2_BASE_URL: "http://r2.internal/objects",

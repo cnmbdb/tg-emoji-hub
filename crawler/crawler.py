@@ -59,6 +59,7 @@ async def cmd_full(cfg: Config, *, dry_run: bool,
             download_thumbs=not no_thumbs,
             download_originals=do_originals,
             media_dir=cfg.media_dir,
+            r2_base_url=cfg.r2_base_url,
         )
         log.info("全量爬取统计 %s", stats)
         return 0
@@ -99,6 +100,17 @@ async def cmd_watch(cfg: Config, *, dry_run: bool, no_originals: bool = False) -
 
     try:
         _start_health_server()
+        if os.getenv("CRAWLER_INITIAL_FULL") == "1":
+            with session_factory() as session:
+                pack_count = session.query(db_mod.StickerPack).count()
+            if pack_count == 0:
+                log.info("数据库为空，开始首次全量抓取")
+                stats = await pipeline.run_full_crawl(
+                    client, session_factory, cfg.thumbnail_dir,
+                    download_originals=do_originals, media_dir=cfg.media_dir,
+                    r2_base_url=cfg.r2_base_url,
+                )
+                log.info("首次全量抓取统计 %s", stats)
         if cfg.r2_base_url:
             await signals.watch_r2_loop(cfg.r2_base_url, processor)
         else:
