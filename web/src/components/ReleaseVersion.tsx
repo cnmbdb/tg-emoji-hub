@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 
 const RELEASES_URL = "https://github.com/cnmbdb/tg-emoji-hub/releases";
-const LATEST_RELEASE_API =
-  "https://api.github.com/repos/cnmbdb/tg-emoji-hub/releases/latest";
 
 type GitHubRelease = {
   tag_name: string;
@@ -16,7 +14,7 @@ export default function ReleaseVersion() {
   useEffect(() => {
     let active = true;
 
-    void fetch(LATEST_RELEASE_API)
+    void fetch("/api/version")
       .then(async (response) => {
         if (!response.ok) return null;
         const data = (await response.json()) as Partial<GitHubRelease>;
