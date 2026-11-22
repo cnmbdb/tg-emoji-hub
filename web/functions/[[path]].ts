@@ -2,11 +2,8 @@ interface Env {
   API: Fetcher;
 }
 
-const RELEASES_API =
-  "https://api.github.com/repos/cnmbdb/tg-emoji-hub/releases/latest";
-const RELEASE_CACHE_KEY = new Request(
-  "https://tg-emoji-hub.pages.dev/__cache/latest-github-release",
-);
+const LATEST_RELEASE_URL =
+  "https://github.com/cnmbdb/tg-emoji-hub/releases/latest";
 
 const apiPath = /^\/(api(?:\/|$)|healthz$|mcp(?:\/|$)|thumbs\/|emoji\/)/;
 
@@ -25,12 +22,15 @@ export const onRequest = async (context: {
       });
     }
 
-    const cached = await caches.default.match(RELEASE_CACHE_KEY);
+    const fallbackTag = url.searchParams.get("fallback") ?? "latest";
+    const releaseCacheKey = new Request(
+      `https://tg-emoji-hub.pages.dev/__cache/latest-github-release?fallback=${encodeURIComponent(fallbackTag)}`,
+    );
+    const cached = await caches.default.match(releaseCacheKey);
     if (cached) return cached;
 
-    const upstream = await fetch(RELEASES_API, {
+    const upstream = await fetch(LATEST_RELEASE_URL, {
       headers: {
-        Accept: "application/vnd.github+json",
         "User-Agent": "tg-emoji-hub",
       },
     });
@@ -41,25 +41,26 @@ export const onRequest = async (context: {
       );
     }
 
-    const release = (await upstream.json()) as {
-      tag_name?: unknown;
-      html_url?: unknown;
-    };
-    if (
-      typeof release.tag_name !== "string" ||
-      typeof release.html_url !== "string"
-    ) {
+    const redirectedUrl = new URL(upstream.url);
+    const tagMatch = redirectedUrl.pathname.match(
+      /^\/cnmbdb\/tg-emoji-hub\/releases\/tag\/([^/]+)\/?$/,
+    );
+    if (!tagMatch) {
       return Response.json(
-        { message: "Invalid GitHub release response" },
+        { message: "Unable to resolve the latest GitHub release tag" },
         { status: 502 },
       );
     }
+    const tagName = decodeURIComponent(tagMatch[1]);
 
     const response = Response.json(
-      { tag_name: release.tag_name, html_url: release.html_url },
+      {
+        tag_name: tagName,
+        html_url: `https://github.com/cnmbdb/tg-emoji-hub/releases/tag/${encodeURIComponent(tagName)}`,
+      },
       { headers: { "Cache-Control": "public, max-age=300" } },
     );
-    await caches.default.put(RELEASE_CACHE_KEY, response.clone());
+    await caches.default.put(releaseCacheKey, response.clone());
     return response;
   }
 

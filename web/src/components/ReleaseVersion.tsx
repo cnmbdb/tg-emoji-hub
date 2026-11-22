@@ -11,13 +11,26 @@ type GitHubRelease = {
   html_url: string;
 };
 
+function compareReleaseTags(left: string, right: string): number {
+  const parse = (tag: string) => tag.match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  if (!leftParts || !rightParts) return 0;
+
+  for (let index = 1; index <= 3; index += 1) {
+    const difference = Number(leftParts[index]) - Number(rightParts[index]);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
 export default function ReleaseVersion() {
   const [release, setRelease] = useState<GitHubRelease>(FALLBACK_RELEASE);
 
   useEffect(() => {
     let active = true;
 
-    void fetch("/api/version")
+    void fetch(`/api/version?fallback=${encodeURIComponent(FALLBACK_TAG)}`)
       .then(async (response) => {
         if (!response.ok) return;
         const data = (await response.json()) as Partial<GitHubRelease>;
@@ -31,7 +44,13 @@ export default function ReleaseVersion() {
       })
       .catch(() => undefined)
       .then((latest) => {
-        if (active && latest) setRelease(latest);
+        if (
+          active &&
+          latest &&
+          compareReleaseTags(latest.tag_name, FALLBACK_TAG) >= 0
+        ) {
+          setRelease(latest);
+        }
       });
 
     return () => {
