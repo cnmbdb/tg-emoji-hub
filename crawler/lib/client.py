@@ -89,8 +89,10 @@ async def login_interactive(cfg: Config) -> None:
                     await client.sign_in(password=password)
                 break
             if not next_type:
-                log.error("Telegram 没有提供备用投递方式；请确认其他已登录设备或稍后重试")
-                continue
+                raise RuntimeError(
+                    "Telegram 没有提供备用验证码投递方式（next_type/timeout 为空）。"
+                    "本次请求不会重发；请到绑定此号码且已登录的 Telegram 客户端检查官方服务通知。"
+                )
             if timeout:
                 log.info("等待 Telegram 允许重发的 %d 秒…", timeout)
                 await asyncio.sleep(timeout)
