@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
+from telethon.tl import functions
 
 if TYPE_CHECKING:
     from .config import Config
@@ -69,13 +70,34 @@ async def login_interactive(cfg: Config) -> None:
             log.info("这个本地 session 已授权，无需再次登录：%s", cfg.session_path)
             return
         sent = await client.send_code_request(cfg.tg_phone)
-        log.info("Telegram 验证码投递方式：%s", type(sent.type).__name__)
-        code = input("Please enter the code you received: ").strip()
-        try:
-            await client.sign_in(phone=cfg.tg_phone, code=code, phone_code_hash=sent.phone_code_hash)
-        except SessionPasswordNeededError:
-            password = getpass.getpass("Telegram two-step verification password: ")
-            await client.sign_in(password=password)
+        while True:
+            next_type = getattr(sent, "next_type", None)
+            timeout = getattr(sent, "timeout", None)
+            next_name = type(next_type).__name__ if next_type else "none"
+            log.info("Telegram 验证码方式=%s；备用方式=%s；等待秒数=%s",
+                     type(sent.type).__name__, next_name, timeout)
+            prompt = "请输入收到的验证码"
+            if next_type:
+                prompt += "；若没收到，等提示的秒数后按 Enter 请求下一种投递方式"
+            code = input(prompt + ": ").strip()
+            if code:
+                try:
+                    await client.sign_in(phone=cfg.tg_phone, code=code,
+                                         phone_code_hash=sent.phone_code_hash)
+                except SessionPasswordNeededError:
+                    password = getpass.getpass("Telegram two-step verification password: ")
+                    await client.sign_in(password=password)
+                break
+            if not next_type:
+                log.error("Telegram 没有提供备用投递方式；请确认其他已登录设备或稍后重试")
+                continue
+            if timeout:
+                log.info("等待 Telegram 允许重发的 %d 秒…", timeout)
+                await asyncio.sleep(timeout)
+            sent = await client(functions.auth.ResendCodeRequest(
+                phone_number=cfg.tg_phone,
+                phone_code_hash=sent.phone_code_hash,
+            ))
         log.info("登录成功，session 已保存至 %s", cfg.session_path)
     finally:
         await disconnect_safely(client)
