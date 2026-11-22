@@ -2,6 +2,7 @@ import { Languages, Send, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import AddPackDialog from "@/components/AddPackDialog";
 import McpDialog from "@/components/McpDialog";
+import ReleaseVersion from "@/components/ReleaseVersion";
 import EmojiGrid from "@/components/EmojiGrid";
 import { Button } from "@/components/ui/button";
 import HotPacks from "@/components/HotPacks";
@@ -95,9 +96,7 @@ export default function SearchPage() {
             <span className="font-mono text-base font-semibold tracking-tight">
               tg-emoji-hub
             </span>
-            <span className="hidden font-mono text-[10px] text-muted-foreground sm:inline">
-              v0.1
-            </span>
+            <ReleaseVersion />
           </div>
           <div className="flex items-center gap-2">
             {/* 语言切换 */}
