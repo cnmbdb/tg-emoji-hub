@@ -126,15 +126,15 @@ export default function SearchPage() {
       </header>
 
       <section className="w-full bg-primary px-4 py-3 text-white sm:px-6">
-        <p className="mx-auto max-w-6xl text-center text-sm font-semibold leading-6 sm:text-base">
-          <span>🎉TGBotPress-开源免费的开发TelegramBot基座</span>{" "}
+        <p className="mx-auto max-w-6xl text-center text-sm font-normal leading-6 sm:text-base">
+          <span>{t("ad_banner_text")}</span>{" "}
           <a
             href="https://hfz.pw/tgpress/tgbotpress/"
             target="_blank"
             rel="noopener noreferrer"
-            className="whitespace-nowrap underline underline-offset-4 transition-opacity hover:opacity-80"
+            className="whitespace-nowrap font-medium underline underline-offset-4 transition-opacity hover:opacity-80"
           >
-            了解详情
+            {t("ad_banner_link")}
           </a>
         </p>
       </section>

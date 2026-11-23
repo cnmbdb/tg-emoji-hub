@@ -10,6 +10,10 @@ export const strings = {
     header_mcp: "MCP",
     header_add_pack: "添加表情包",
 
+    // 首页广告横幅
+    ad_banner_text: "🎉 TGBotPress-开源免费的开发TelegramBot基座",
+    ad_banner_link: "了解详情",
+
     // 语言切换
     lang_toggle: "EN",
 
@@ -90,6 +94,10 @@ export const strings = {
     header_community: "Community",
     header_mcp: "MCP",
     header_add_pack: "Add Pack",
+
+    // 首页广告横幅
+    ad_banner_text: "🎉 TGBotPress — free, open-source Telegram bot framework",
+    ad_banner_link: "Learn more",
 
     // 语言切换
     lang_toggle: "中",
