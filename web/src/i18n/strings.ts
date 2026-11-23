@@ -49,6 +49,10 @@ export const strings = {
 
     // HotPacks section
     hot_packs: "Hot Packs",
+    hot_packs_pagination: "热门表情包分页",
+    pagination_previous: "上一页",
+    pagination_next: "下一页",
+    pagination_go_to_page: (page: string) => `第 ${page} 页`,
 
     // UsagePreview
     usage_hint: '搜索 "fire" → 复制 HTML 输出',
@@ -134,6 +138,10 @@ export const strings = {
 
     // HotPacks section
     hot_packs: "Hot Packs",
+    hot_packs_pagination: "Hot packs pagination",
+    pagination_previous: "Previous",
+    pagination_next: "Next",
+    pagination_go_to_page: (page: string) => `Go to page ${page}`,
 
     // UsagePreview
     usage_hint: 'Search "fire" → Copy HTML output',

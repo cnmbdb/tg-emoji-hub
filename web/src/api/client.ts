@@ -124,13 +124,19 @@ export async function listPacks(
 
 // hot 排序 + preview_emojis 内联，给首页 HotPacks 用
 export async function getHotPacks(
-  limit = 12,
+  page = 1,
+  pageSize = 12,
   signal?: AbortSignal,
 ): Promise<PageResult<StickerPackWithPreview>> {
   const resp = await http.get<ApiResponse<PageResult<StickerPackWithPreview>>>(
     "/api/v1/packs",
     {
-      params: { sort: "hot", with_preview: true, page_size: limit },
+      params: {
+        sort: "hot",
+        with_preview: true,
+        page,
+        page_size: pageSize,
+      },
       signal,
     },
   );

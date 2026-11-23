@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { getHotPacks } from "@/api/client";
 import type { EmojiPreviewBrief, StickerPackWithPreview } from "@/api/types";
 import { useT } from "@/i18n/LanguageProvider";
+import { Button } from "@/components/ui/button";
 import EmojiMedia from "./EmojiMedia";
 import { Skeleton } from "./ui/skeleton";
 
-const HOT_LIMIT = 12;
+const HOT_PAGE_SIZE = 12;
 
 interface HotPacksProps {
   onPackSelect: (shortName: string) => void;
@@ -15,14 +16,20 @@ export default function HotPacks({ onPackSelect }: HotPacksProps) {
   const [packs, setPacks] = useState<StickerPackWithPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const t = useT();
 
   useEffect(() => {
     const ctrl = new AbortController();
     let cancelled = false;
-    getHotPacks(HOT_LIMIT, ctrl.signal)
+    setLoading(true);
+    setFailed(false);
+    getHotPacks(page, HOT_PAGE_SIZE, ctrl.signal)
       .then((res) => {
-        if (!cancelled) setPacks(res.items);
+        if (cancelled) return;
+        setPacks(res.items);
+        setTotal(res.total);
       })
       .catch(() => {
         // 优雅降级：API 失败整块隐藏
@@ -35,7 +42,7 @@ export default function HotPacks({ onPackSelect }: HotPacksProps) {
       cancelled = true;
       ctrl.abort();
     };
-  }, []);
+  }, [page]);
 
   // 没数据也没在加载（接口挂了或返回空）静默隐藏
   if (failed) return null;
@@ -67,12 +74,59 @@ export default function HotPacks({ onPackSelect }: HotPacksProps) {
           : packs.map((pack, i) => (
               <PackRow
                 key={pack.id}
-                index={i}
+                index={(page - 1) * HOT_PAGE_SIZE + i}
                 pack={pack}
                 onSelect={() => onPackSelect(pack.short_name)}
               />
             ))}
       </div>
+      {!loading && total > HOT_PAGE_SIZE && (
+        <nav
+          aria-label={t("hot_packs_pagination")}
+          className="mt-3 flex flex-wrap items-center justify-center gap-1.5"
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={page === 1}
+            aria-label={t("pagination_previous")}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            {t("pagination_previous")}
+          </Button>
+          {Array.from({ length: Math.ceil(total / HOT_PAGE_SIZE) }, (_, i) =>
+            i + 1,
+          ).map((pageNumber) => (
+            <Button
+              key={pageNumber}
+              type="button"
+              size="sm"
+              variant={pageNumber === page ? "default" : "outline"}
+              aria-label={t("pagination_go_to_page", String(pageNumber))}
+              aria-current={pageNumber === page ? "page" : undefined}
+              className="min-w-8 px-2 font-mono"
+              onClick={() => setPage(pageNumber)}
+            >
+              {pageNumber}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={page >= Math.ceil(total / HOT_PAGE_SIZE)}
+            aria-label={t("pagination_next")}
+            onClick={() =>
+              setPage((current) =>
+                Math.min(Math.ceil(total / HOT_PAGE_SIZE), current + 1),
+              )
+            }
+          >
+            {t("pagination_next")}
+          </Button>
+        </nav>
+      )}
     </div>
   );
 }
